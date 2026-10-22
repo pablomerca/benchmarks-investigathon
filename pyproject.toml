@@ -1,0 +1,27 @@
+[project]
+name = "rhbench"
+version = "0.1.0"
+description = "Phase 1 benchmark pipeline: ImpossibleBench rollouts -> labeled dataset + hack rates"
+requires-python = ">=3.11"
+dependencies = [
+    "inspect_ai",
+    "openai",  # ollama + llama.cpp (openai-api) providers
+    "impossiblebench @ git+https://github.com/safety-research/impossiblebench",
+    "pandas",
+    "pyarrow",
+    "scipy",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

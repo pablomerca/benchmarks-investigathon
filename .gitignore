@@ -1,0 +1,24 @@
+
+# environments & build artifacts
+.venv/
+venv/
+*.egg-info/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# generated outputs: reproducible by re-running `rhbench.run` / `rhbench.report`
+runs/
+results*/
+*.eval
+*.parquet
+
+# local secrets / editor noise
+.env
+.claude/
+.vscode/
+.idea/
+.DS_Store

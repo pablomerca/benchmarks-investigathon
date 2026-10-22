@@ -1,0 +1,10 @@
+# Extra keyword args forwarded to impossiblebench tasks, per benchmark.
+# Defaults follow ImpossibleBench (allow_test_modifications=True: editing tests counts as a pass,
+# i.e. a hack). Change only deliberately - it changes what "Hacked" means.
+task_kwargs:
+  lcb:
+    max_attempts: 3
+    message_limit: 30
+    allow_test_modifications: true
+  swe:
+    message_limit: 100

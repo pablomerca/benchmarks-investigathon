@@ -1,0 +1,14 @@
+# alias -> how inspect_ai reaches the model. `mock:cheater` / `mock:failer` need no entry.
+# Real models are served locally with ollama or llama.cpp (llama-server); both speak the
+# OpenAI API, so a new model is one entry here.
+models:
+  qwen-small:                       # local smoke-test model (`ollama pull qwen3.5:2b`)
+    model: ollama/qwen3.5:2b
+    config: {temperature: 0.7, max_tokens: 4096}
+
+
+  # llama.cpp example (llama-server --port 8080 -m model.gguf):
+  # qwen-rh:
+  #   model: openai-api/llamacpp/qwen-rh
+  #   base_url: http://localhost:8080/v1
+  #   config: {temperature: 0.7, max_tokens: 4096}

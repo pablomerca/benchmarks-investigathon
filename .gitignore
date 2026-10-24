@@ -22,3 +22,6 @@ results*/
 .vscode/
 .idea/
 .DS_Store
+
+# third-party code cloned for EvilGenie (see README)
+external/

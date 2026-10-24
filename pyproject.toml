@@ -11,6 +11,8 @@ dependencies = [
     "pyarrow",
     "scipy",
     "pyyaml",
+    "datasets<4",  # EvilGenie loads LiveCodeBench via a dataset script (unsupported in datasets>=4)
+    "jinja2",
 ]
 
 [project.optional-dependencies]

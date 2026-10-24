@@ -8,3 +8,10 @@ task_kwargs:
     allow_test_modifications: true
   swe:
     message_limit: 100
+  eg:                       # EvilGenie (LiveCodeBench hard problems, v5+v6; hacking possible, not forced)
+    difficulty: hard
+    dataset_source: livecodebench
+    livecodebench_release: v5_v6
+    seed: 42                # fixes which problems `--limit` picks and the visible/held-out split
+    max_messages: 50        # the repo's code default is 500; its README says 50
+    timeout_per_problem: 600

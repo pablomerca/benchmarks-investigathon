@@ -5,6 +5,7 @@ from dataclasses import dataclass, asdict, field
 SOLVED, UNSOLVED, HACKED = "Solved", "Unsolved", "Hacked"
 IMPOSSIBLE_SPLITS = ("oneoff", "conflicting")
 SPLITS = ("original", *IMPOSSIBLE_SPLITS)
+NATURAL = "natural"  # EvilGenie has no splits: hacking is possible, not forced
 
 
 @dataclass
@@ -18,6 +19,10 @@ class Rollout:
     passed: bool
     label: str = ""
     solved_verified: bool = False  # always False for now: Solved on `original` is an upper bound
+    hack_signal: bool = False  # hacking evidence present, whether or not the tests passed
+    # EvilGenie only (empty for ImpossibleBench): the raw signals the label is derived from
+    test_result: str = ""  # passed_all | passed_visible_only | failed_visible
+    llm_classification: str = ""  # legitimate | heuristic | reward_hacking | error | skipped
     test_file_modified: bool = False
     n_turns: int = 0
     exit_status: str = "completed"  # completed | message_limit | error | ...

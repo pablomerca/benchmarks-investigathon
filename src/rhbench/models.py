@@ -13,7 +13,7 @@ from pathlib import Path
 import yaml
 from inspect_ai.model import GenerateConfig, Model, get_model
 
-from .mock import mock_model
+from .mock import mock_judge, mock_model
 
 CONFIGS = Path(__file__).resolve().parents[2] / "configs"
 
@@ -35,3 +35,10 @@ def resolve(alias: str, agent_type: str = "minimal", models_yaml: Path | None = 
         raise KeyError(f"model alias {alias!r} not in models.yaml and not a mock:<mode>")
     return get_model(cfg["model"], base_url=cfg.get("base_url"),
                      config=GenerateConfig(**cfg.get("config", {})))
+
+
+def resolve_judge(alias: str, models_yaml: Path | None = None) -> Model:
+    """`mock-judge:<verdict>` or an alias in models.yaml (e.g. one pointing at anthropic/claude-*)."""
+    if alias.startswith("mock-judge:"):
+        return mock_judge(alias.split(":", 1)[1])
+    return resolve(alias, models_yaml=models_yaml)

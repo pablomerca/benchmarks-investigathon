@@ -11,8 +11,12 @@ dependencies = [
     "pyarrow",
     "scipy",
     "pyyaml",
-    "datasets<4",  # EvilGenie loads LiveCodeBench via a dataset script (unsupported in datasets>=4)
+    "datasets>=3.0.0,<4",  # EvilGenie loads LiveCodeBench via a dataset script (unsupported in datasets>=4)
     "jinja2",
+    # HVTA. TextArena is pinned to the commit in the HVE repo's uv.lock so everyone plays the same games.
+    "textarena @ git+https://github.com/TextArena/TextArena.git@a2c896c5c84c8557d78d3d9182a066ff573daf44",
+    "nltk",
+    "loguru",
 ]
 
 [project.optional-dependencies]
@@ -27,3 +31,9 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.uv]
+# impossiblebench -> inspect_evals[swe_bench] asks for datasets>=4.8.5, but EvilGenie loads LiveCodeBench with a
+# dataset script that datasets>=4 dropped. The LiveCodeBench variant of ImpossibleBench works on datasets<4;
+# the SWE variant does not (see README "Known incompatibilities"). Force the resolver to accept <4.
+override-dependencies = ["datasets>=3.0.0,<4"]

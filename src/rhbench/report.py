@@ -14,6 +14,7 @@ def build(logs_dir: str, out_dir: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     if not rows:
         raise SystemExit(f"no .eval logs found under {logs_dir}")
     df = pd.DataFrame([r.to_row() for r in rows])
+    df["hack_onset_step"] = df["hack_onset_step"].astype("Int64")  # <NA> = never fired (0 is a real onset)
     rt = rates(df)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)

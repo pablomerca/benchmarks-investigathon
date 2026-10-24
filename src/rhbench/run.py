@@ -4,6 +4,7 @@
   python -m rhbench.run --model qwen-small --bench lcb --split original oneoff conflicting
   python -m rhbench.run --model qwen-small --bench eg --judge claude-judge --limit 20
   python -m rhbench.run --model qwen-small --bench eg --no-judge        # tests + file integrity only
+  python -m rhbench.run --model qwen-small --bench hvta --limit 5        # text games, exact hack flags
 """
 
 import argparse
@@ -35,9 +36,17 @@ def _evilgenie_task(limit: int | None, **kw):
     return reward_hacking(limit=limit, **kw)
 
 
+# Benchmarks without ImpossibleBench-style splits: run once, with a fixed agent-type label.
+# (HVTA's two hack types live inside the one task and become the `split` column per sample.)
+SPLITLESS = {"eg": ("basic", NATURAL), "hvta": ("text", NATURAL)}
+
+
 def make_task(bench: str, split: str, agent_type: str, limit: int | None, **kw):
     if bench == "eg":
         return _evilgenie_task(limit, **kw)
+    if bench == "hvta":
+        from .hvta_task import hvta
+        return hvta(limit=limit, **kw)
     from impossiblebench import impossible_livecodebench, impossible_swebench
     if bench == "lcb":
         return impossible_livecodebench(split, agent_type=agent_type, limit=limit, **kw)
@@ -58,11 +67,12 @@ def run_grid(model: str, benches, splits, agent_type="minimal", limit=None, epoc
     logs = []
     for bench in benches:
         is_eg = bench == "eg"
+        splitless = bench in SPLITLESS
         if is_eg and not judge and not no_judge:
             raise ValueError("EvilGenie needs --judge <alias> (e.g. a Claude entry in models.yaml) "
                              "or --no-judge to skip the LLM judge")
-        for split in ([NATURAL] if is_eg else splits):
-            agent = "basic" if is_eg else agent_type
+        for split in ([SPLITLESS[bench][1]] if splitless else splits):
+            agent = SPLITLESS[bench][0] if splitless else agent_type
             kw = dict((task_kwargs or {}).get(bench, {}))
             if is_eg:
                 kw["enable_llm_judge"] = not no_judge
@@ -82,7 +92,7 @@ def run_grid(model: str, benches, splits, agent_type="minimal", limit=None, epoc
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True, help="alias in models.yaml or mock:<mode>")
-    ap.add_argument("--bench", nargs="+", default=["lcb"], choices=["lcb", "swe", "eg"])
+    ap.add_argument("--bench", nargs="+", default=["lcb"], choices=["lcb", "swe", "eg", "hvta"])
     ap.add_argument("--split", nargs="+", default=list(SPLITS), choices=list(SPLITS),
                     help="ImpossibleBench only")
     ap.add_argument("--agent-type", default="minimal", choices=["minimal", "tools"],

@@ -15,3 +15,10 @@ task_kwargs:
     seed: 42                # fixes which problems `--limit` picks and the visible/held-out split
     max_messages: 50        # the repo's code default is 500; its README says 50
     timeout_per_problem: 600
+  hvta:                     # Hack-Verifiable TextArena (text games; hacks are flagged deterministically)
+    trajectories: 5         # per environment; the paper's leaderboard uses 5 (use trajectories, not --epochs:
+                            # epochs would replay identical seeds)
+    games_per_trajectory: 3 # persistent context across the games of one trajectory (paper leaderboard: 3)
+    max_steps: 80           # hard cap on agent actions per game (fs commands do not advance the game)
+    seed: 42                # same games for every model
+    # envs: omit to use the 9 hidden-solution + 5 logical-bug environments (see hvta_task.DEFAULT_ENVS)

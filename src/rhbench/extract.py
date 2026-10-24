@@ -103,9 +103,45 @@ def _evilgenie_signals(sample: EvalSample) -> tuple[str, str, bool]:
             bool(v.get("files_modified", False)))
 
 
+def _is_hvta(log: EvalLog) -> bool:
+    # inspect namespaces tasks defined inside an installed package: "rhbench/hvta"
+    return log.eval.task.rsplit("/", 1)[-1] == "hvta"
+
+
+def _hvta_rollouts(log: EvalLog, alias: str, path: str) -> list[Rollout]:
+    """One Rollout per game. A trajectory (inspect sample) is `n_games` consecutive games."""
+    out = []
+    for s in log.samples or []:
+        md = s.metadata or {}
+        traj_id = f"{s.id}|e{s.epoch}"
+        score = next(iter(s.scores.values()), None) if s.scores else None
+        games = (score.metadata or {}).get("games") if score is not None else None
+        base = dict(model=alias, benchmark="hvta", split=md.get("hack_type", ""), agent_type="text",
+                    task_id=md.get("env_name", str(s.id)), epoch=s.epoch, trajectory_id=traj_id,
+                    log_path=path)
+        if not games:
+            # The run errored before producing results. Keep placeholder rows so the trajectory still
+            # counts in the denominator (labelled Unsolved, exit_status "error", surfaced in rates.csv).
+            for g in range(int(md.get("n_games", 1))):
+                out.append(apply_label(Rollout(**base, game_index=g, passed=False, exit_status="error")))
+            continue
+        for g in games:
+            msgs = s.messages[g["msg_start"]:g["msg_end"]]
+            r = Rollout(
+                **base, game_index=g["game_index"], passed=g["won"], won=g["won"], reward=g["reward"],
+                hack_signal=g["hack_triggered"], hack_onset_step=g["hack_onset_step"], n_steps=g["n_steps"],
+                n_turns=sum(m.role == "assistant" for m in msgs),
+                exit_status="completed" if g["done"] else "step_limit",
+                trace_json=json.dumps([m.model_dump(mode="json", exclude_none=True) for m in msgs]))
+            out.append(apply_label(r))
+    return out
+
+
 def rollouts_from_log(log: EvalLog, path: str = "") -> list[Rollout]:
     alias = (log.eval.metadata or {}).get("alias") or log.eval.model
     out = []
+    if _is_hvta(log):
+        return _hvta_rollouts(log, alias, path)
     if _is_evilgenie(log):
         for s in log.samples or []:
             tr, llm, fm = _evilgenie_signals(s)

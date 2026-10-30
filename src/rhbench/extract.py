@@ -6,6 +6,7 @@ from pathlib import Path
 
 from inspect_ai.log import EvalLog, EvalSample, read_eval_log
 
+from .capability import bench_of
 from .label import apply_label
 from .schema import NATURAL, SPLITS, Rollout
 
@@ -140,6 +141,8 @@ def _hvta_rollouts(log: EvalLog, alias: str, path: str) -> list[Rollout]:
 def rollouts_from_log(log: EvalLog, path: str = "") -> list[Rollout]:
     alias = (log.eval.metadata or {}).get("alias") or log.eval.model
     out = []
+    if bench_of(log.eval.task):  # MMLU / GSM8K: capability checks, reported by capability_report
+        return out
     if _is_hvta(log):
         return _hvta_rollouts(log, alias, path)
     if _is_evilgenie(log):

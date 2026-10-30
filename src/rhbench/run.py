@@ -5,6 +5,7 @@
   python -m rhbench.run --model qwen-small --bench eg --judge claude-judge --limit 20
   python -m rhbench.run --model qwen-small --bench eg --no-judge        # tests + file integrity only
   python -m rhbench.run --model qwen-small --bench hvta --limit 5        # text games, exact hack flags
+  python -m rhbench.run --model qwen-base --bench mmlu gsm8k --limit 500 # capability check (see capability.py)
 """
 
 import argparse
@@ -15,6 +16,7 @@ from pathlib import Path
 import yaml
 from inspect_ai import eval
 
+from .capability import CAPABILITY_BENCHES, SPLIT as CAPABILITY_SPLIT, capability_task
 from .models import CONFIGS, is_mock, resolve, resolve_judge
 from .schema import NATURAL, SPLITS
 
@@ -38,7 +40,8 @@ def _evilgenie_task(limit: int | None, **kw):
 
 # Benchmarks without ImpossibleBench-style splits: run once, with a fixed agent-type label.
 # (HVTA's two hack types live inside the one task and become the `split` column per sample.)
-SPLITLESS = {"eg": ("basic", NATURAL), "hvta": ("text", NATURAL)}
+SPLITLESS = {"eg": ("basic", NATURAL), "hvta": ("text", NATURAL),
+             **{b: ("basic", CAPABILITY_SPLIT) for b in CAPABILITY_BENCHES}}
 
 
 def make_task(bench: str, split: str, agent_type: str, limit: int | None, **kw):
@@ -76,7 +79,9 @@ def run_grid(model: str, benches, splits, agent_type="minimal", limit=None, epoc
             kw = dict((task_kwargs or {}).get(bench, {}))
             if is_eg:
                 kw["enable_llm_judge"] = not no_judge
-            task = make_task(bench, split, agent, limit, **kw)
+            capability = bench in CAPABILITY_BENCHES
+            # capability tasks take no `limit` argument: inspect applies it to the (fixed-order) dataset
+            task = capability_task(bench, **kw) if capability else make_task(bench, split, agent, limit, **kw)
             roles = {"judge": resolve_judge(judge)} if is_eg and judge and not no_judge else None
             logs += eval(
                 task, model=resolve(model, agent), epochs=epochs, model_roles=roles,
@@ -84,6 +89,9 @@ def run_grid(model: str, benches, splits, agent_type="minimal", limit=None, epoc
                 metadata={"alias": model, "agent_type": agent, "judge": judge or ""},
                 # mock tool-call scripts are order-dependent -> strictly sequential
                 max_samples=1 if is_mock(model) else max_samples,
+                limit=limit if capability else None,
+                # RHBENCH_ROBUST=1: one failed request no longer aborts the whole task (a failed sample is retried once, then logged as an error)
+                **({"fail_on_error": False, "retry_on_error": 1} if os.environ.get("RHBENCH_ROBUST") else {}),
                 display="none",
             )
     return logs
@@ -92,7 +100,7 @@ def run_grid(model: str, benches, splits, agent_type="minimal", limit=None, epoc
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True, help="alias in models.yaml or mock:<mode>")
-    ap.add_argument("--bench", nargs="+", default=["lcb"], choices=["lcb", "swe", "eg", "hvta"])
+    ap.add_argument("--bench", nargs="+", default=["lcb"], choices=["lcb", "swe", "eg", "hvta", *CAPABILITY_BENCHES])
     ap.add_argument("--split", nargs="+", default=list(SPLITS), choices=list(SPLITS),
                     help="ImpossibleBench only")
     ap.add_argument("--agent-type", default="minimal", choices=["minimal", "tools"],

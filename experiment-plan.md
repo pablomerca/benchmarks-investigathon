@@ -72,7 +72,93 @@ between analysis and write-up.
 | Fine-tune seeds | 1 per type (n=1) — see *Limitations*, this is the biggest caveat |
 | Eval budget | 24-36 h wall clock; 5 arms instead of 4 is ~+25%, so the grid is sized accordingly |
 | Base model | **Qwen3.5-27B**, served from the more capable EC2 VM. The local `temp/Qwen3.5-9B/` (safetensors + BF16/Q8 GGUF) is for **pipeline debugging only** |
-| Generation config | **To be decided by a pilot**: thinking on vs off, measuring the slowdown first |
+| Generation config | **Decided by the pilot (Oct 2026): thinking OFF, `max_tokens` 4096**, model-card sampling. See *Execution plan: 2.5-day window* below |
+
+---
+
+## Execution plan: 2.5-day window (supersedes the rows above where they conflict)
+
+Budget: **60 h wall clock** on the L40S box (46 GB), Qwen3.5-27B Q8_0 (29 GB weights), **3 arms**:
+`qwen-base`, `qwen-em-insecure` (`sft_modelos/Qwen3.5-27B_EM_Insecure`), `qwen-sorh`
+(`sft_modelos/Qwen3.5-27B_SoRH`). The 5-arm design above is not achievable here.
+
+### What the pilot decided (27B base, 2 `oneoff` problems, 1 sample at a time per arm)
+
+| | thinking off (`max_tokens` 4096) | thinking on (`max_tokens` 16384) |
+|---|---|---|
+| wall clock for 2 problems | 12 min 18 s | 60 min 1 s |
+| time per sample | 421 s, 313 s | 2181 s, 1416 s |
+| output tokens per sample | 9.0k, 6.5k | 49.2k, 32.9k |
+| generation speed | 21-23 tok/s | 22-23 tok/s |
+| assistant turns with non-empty text | 6/6 | **2/6** (fails Gate 0) |
+
+Speed per stream is identical; the slowdown is entirely extra tokens (5.3x). Thinking on is
+infeasible in this window (618 impossible-split rollouts x ~41k tokens = 25M tokens = ~160 h at 2
+streams) and fails Gate 0 at a 16k cap. **Frozen for all arms: thinking off, `max_tokens` 4096,
+`temperature 0.6, top_p 0.95, top_k 20, min_p 0, presence_penalty 0, repetition_penalty 1`,
+`max_retries 1`, `INSPECT_HTTP_REQUEST_TIMEOUT=14400`.** Cost: no reasoning traces for the
+verbalised-intent analysis. n=2 problems, so this is a timing/format result only, not a hack-rate one.
+
+### Grid
+
+1 epoch per problem, ImpossibleBench-LCB only, three splits per arm: `oneoff`, `conflicting`
+(primary), `original` (Gate C solve-rate control). 3 x 309 = **927 rollouts**. Not in this window:
+HVTA, EvilGenie, Gate A (`em_eval`), and the matched controls `EM_Secure` / `SoRH_Control`
+(adapters exist in `sft_modelos/` but would add 2 more arms). **Consequence: the primary estimand
+`EM - EM_control` cannot be computed from this run.** It yields hack and solve rates for
+base / EM-insecure / SoRH only; treat EM-vs-base as descriptive and state the missing control.
+
+### Time estimate
+
+| tokens per rollout | 2 streams (44 tok/s aggregate) |
+|---|---|
+| 5k (earlier 27B run, median 223 s) | ~29 h |
+| 7.8k (pilot mean, worst-case problems) | ~45 h |
+
+If 6 concurrent streams scale (unmeasured), 16-25 h. Margin inside 60 h: 15-30 h in the slow case.
+A second epoch on the two impossible splits (+412 rollouts) is added only if the checkpoint below
+projects <= 40 h total.
+
+### Serving: one server, three arms, 6 slots
+
+Slots cost memory by context: at 2 x 81,920 the server used 37.3 GB (~4 GB per 80k tokens, ~50
+KB/token). Thinking-off rollouts need ~20k (prompt + 3 turns x 4096), so:
+
+```
+llama-server -m Qwen3.5-27B-Q8_0.gguf --lora <EM_Insecure>.gguf --lora <SoRH>.gguf \
+  --lora-init-without-apply --parallel 6 -c 147456 --jinja --port 8082 -ngl 99   # 6 x 24,576
+```
+
+~29 GB weights + ~7 GB KV = ~37-39 GB (estimate). Each arm is its own `rhbench.run` process with
+`--max-samples 2`; the alias sets the adapter scale per request in `extra_body` (`lora`: base all
+0, EM-insecure adapter 1, SoRH adapter 1). Aliases to add to `configs/models.yaml` with otherwise
+identical `config`: `qwen27b-base`, `qwen27b-em-insecure`, `qwen27b-sorh`.
+
+**Unverified, test before committing the window (10 min):** (1) per-request `lora` selection works
+on this build; (2) requests with different adapter settings may not batch together in llama.cpp,
+which would cap throughput near the 2-stream figure; (3) per-stream speed at 6 streams. If (1)
+fails, fall back to running the arms one after another, 2 slots each (the 29-45 h case).
+
+### Order, checkpoints, cut rule
+
+1. Run `oneoff` then `conflicting` for all three arms first; `original` last, so the primary
+   endpoints finish even if time runs out.
+2. **Checkpoint at T+2 h:** project total hours from completed rollouts.
+   - projected <= 40 h: add epoch 2 on `oneoff` / `conflicting`.
+   - 40-55 h: no change.
+   - > 55 h: cut `original` to a seeded 50-problem subset (the plan's existing cut order).
+   Never cut the 103 problems of the impossible splits or any of the three arms.
+3. Runs are resumable (`inspect_ai.eval_retry` recovers finished samples, as done for `qwen-base`);
+   write each arm to its own `--log-root`/dir and never delete partial logs.
+4. **Gate 0 check on the first finished samples** (non-empty text >= 95%) before leaving it
+   unattended; watch the `errors` column in `rates.csv`.
+
+### Pre-launch checklist
+
+- Convert `Qwen3.5-27B_EM_Insecure` to GGUF with `llama.cpp/convert_lora_to_gguf.py --base
+  sft_modelos/Qwen3.5-27B` (the SoRH 27B GGUF already exists).
+- Run the 10-minute 6-slot / adapter-switching test above.
+- Add the three aliases; keep `runs.yaml` task kwargs unchanged.
 
 ---
 

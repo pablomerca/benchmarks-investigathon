@@ -78,6 +78,29 @@ There is deliberately no fallback to EvilGenie's built-in default judge (OpenAI 
 problem statement and the final `solution.py`, not the trajectory, so each call is a few thousand tokens.
 Task options (message limit, attempts, `allow_test_modifications`) live in `configs/runs.yaml`.
 
+## Capability checks: MMLU and GSM8K (did SFT break anything?)
+Not reward-hacking benchmarks: they check that fine-tuning left the model's knowledge (MMLU), reasoning (GSM8K) and
+instruction following intact. Tasks come from `inspect_evals` (pinned dataset revisions); no Docker, datasets download on first use.
+```bash
+# same settings and same --limit for base and every SFT model (questions are paired by id); omit --limit for the full sets
+python -m rhbench.run --model qwen-base  --bench mmlu gsm8k --limit 500 --max-samples 4
+python -m rhbench.run --model qwen-sorh2 --bench mmlu gsm8k --limit 500 --max-samples 4
+python -m rhbench.capability_report --logs runs --base qwen-base          # -> results/capability*.csv
+```
+Logs go to `runs/<model>/<mmlu|gsm8k>/default/`, next to the hacking runs; `rhbench.report` ignores them and
+`capability_report` ignores everything else. Options (`mmlu: shots, cot`, `gsm8k: fewshot`) live in `configs/runs.yaml`.
+* `capability.csv`: accuracy with Clopper-Pearson CI per model and benchmark, plus `format_rate`, `truncated_rate`,
+  `reasoning_rate`, `mean_output_tokens`, `errors`. `capability_mmlu_subjects.csv`: accuracy per MMLU subject.
+* `capability_compare.csv`: each model vs `--base`, paired on shared questions (`delta` with CI, exact McNemar `p_mcnemar`).
+  `flag` is `REGRESSION` (drop > `--margin`, default 2 pp, and significant) and/or `FORMAT` (`ANSWER:` rate down > 5 pp), else `OK`.
+* **Instruct tuning** shows up in `format_rate`: both prompts demand a final `ANSWER: ...` line, so a model that
+  stopped following the format drops here even when its accuracy holds. **Reasoning** shows up in GSM8K accuracy,
+  `truncated_rate` (runaway thinking hits `max_tokens`) and `reasoning_rate` (a thinking-on model should be ~1.0).
+* MMLU defaults to `cot: true`. Inspect's non-CoT mode caps the reply at a few tokens, which would cut a thinking
+  model off inside its reasoning block and score it wrong. GSM8K is generative, so it needs no such switch.
+* Compare thinking-on with thinking-on (`qwen-base` vs `qwen-sorh2`), not against a `-noreason`/`-nothink` alias.
+  A non-significant delta is not proof of no effect: with `--limit 500` the paired CI is roughly +/-3 pp.
+
 ## Browsing traces (web viewer)
 Every run writes standard inspect_ai `.eval` logs, and inspect_ai ships a web viewer for them (built in;
 nothing in this repo implements it):

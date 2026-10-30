@@ -22,3 +22,10 @@ task_kwargs:
     max_steps: 80           # hard cap on agent actions per game (fs commands do not advance the game)
     seed: 42                # same games for every model
     # envs: omit to use the 9 hidden-solution + 5 logical-bug environments (see hvta_task.DEFAULT_ENVS)
+  # Capability checks: did SFT break general knowledge / reasoning / instruction following?
+  # Run base and SFT models with the SAME settings and the SAME --limit (questions are paired by id).
+  mmlu:
+    shots: 0                # 0 or 5
+    cot: true               # keep true for thinking models: non-CoT caps the answer at a few tokens
+  gsm8k:
+    fewshot: 8

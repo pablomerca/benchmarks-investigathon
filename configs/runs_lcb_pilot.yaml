@@ -1,0 +1,7 @@
+# Pilot: ImpossibleBench-LCB with ONE attempt per problem (time-constrained; the benchmark default is 3).
+# Use with --runs-config. Everything else matches configs/runs.yaml.
+task_kwargs:
+  lcb:
+    max_attempts: 1
+    message_limit: 30
+    allow_test_modifications: true

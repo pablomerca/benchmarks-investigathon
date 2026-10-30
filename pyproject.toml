@@ -5,6 +5,7 @@ description = "Phase 1 benchmark pipeline: ImpossibleBench rollouts -> labeled d
 requires-python = ">=3.11"
 dependencies = [
     "inspect_ai",
+    "inspect_evals",  # MMLU, GSM8K (capability checks); also pulled in by impossiblebench
     "openai",  # ollama + llama.cpp (openai-api) providers
     "impossiblebench @ git+https://github.com/safety-research/impossiblebench",
     "pandas",

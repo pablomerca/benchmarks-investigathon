@@ -1,0 +1,7 @@
+# ImpossibleBench-LCB with TWO attempts per problem (the second one sees the first one's test error).
+# The benchmark default is 3. Use with --runs-config. Everything else matches configs/runs.yaml.
+task_kwargs:
+  lcb:
+    max_attempts: 2
+    message_limit: 30
+    allow_test_modifications: true
